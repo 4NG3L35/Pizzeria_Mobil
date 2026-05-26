@@ -3,52 +3,77 @@ import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Tou
 import { useRouter, Link } from 'expo-router';
 import { CustomInput } from '../components/ui/CustomInput';
 import { CustomButton } from '../components/ui/CustomButton';
-import { getDatabase } from '../database/db';
-import { useAuth } from '../context/AuthContext';
+import { supabase } from '../database/supabase';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login } = useAuth();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState(''); // Puede ser correo o nombre de usuario
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email || !password) {
+    if (!identifier || !password) {
       Alert.alert('Error', 'Por favor ingresa tu correo y contraseña');
       return;
     }
 
+    setLoading(true);
     try {
-      const db = await getDatabase();
-      const user: any = await db.getFirstAsync(
-        'SELECT * FROM users WHERE (email = $email1 OR username = $email2) AND password = $password',
-        { $email1: email.trim(), $email2: email.trim(), $password: password.trim() }
-      );
+      let targetEmail = identifier.trim();
 
-      if (user) {
-        // Autenticación exitosa
-        login({
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          role: user.role
-        });
-        
+      // SOPORTE INTELIGENTE: Si no contiene '@', asumimos que ingresó su nombre de usuario.
+      // Buscamos el correo correspondiente en la tabla 'profiles' de Supabase.
+      if (!targetEmail.includes('@')) {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('username', targetEmail)
+          .maybeSingle(); // Usamos maybeSingle para evitar crasheos si no hay coincidencia
+
+        if (profile?.email) {
+          targetEmail = profile.email;
+        } else {
+          Alert.alert('Error', 'No se encontró ningún usuario con ese nombre de usuario.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Autenticación real en Supabase Auth
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: targetEmail,
+        password: password.trim(),
+      });
+
+      if (error) {
+        Alert.alert('Error al iniciar sesión', error.message);
+        setLoading(false);
+        return;
+      }
+
+      // Si todo sale bien, buscamos el rol en el perfil para la redirección inmediata
+      if (data?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .single();
+
+        const role = profile?.role || 'client';
+
         // Redirigir según el rol
-        if (user.role === 'admin') {
+        if (role === 'admin') {
           router.replace('/(drawer)/dashboard');
         } else {
           router.replace('/(drawer)/menu');
         }
-      } else {
-        const allUsers = await db.getAllAsync('SELECT * FROM users');
-        console.log('Usuarios en BD:', allUsers);
-        console.log('Intento de login con:', { email: email.trim(), password: password.trim() });
-        Alert.alert('Error', 'Correo o contraseña incorrectos');
       }
+
     } catch (error: any) {
-      console.error('Error in login:', error);
+      console.error('Error al iniciar sesión:', error);
       Alert.alert('Error', `Hubo un problema al iniciar sesión: ${error.message || error}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -67,10 +92,11 @@ export default function LoginScreen() {
           <CustomInput
             placeholder="Usuario o Correo Electrónico"
             iconName="person-outline"
-            value={email}
-            onChangeText={setEmail}
+            value={identifier}
+            onChangeText={setIdentifier}
             keyboardType="email-address"
             autoCapitalize="none"
+            editable={!loading}
           />
           <CustomInput
             placeholder="Contraseña"
@@ -78,24 +104,26 @@ export default function LoginScreen() {
             isPassword
             value={password}
             onChangeText={setPassword}
+            editable={!loading}
           />
           
           <View style={styles.forgotPasswordContainer}>
-            <TouchableOpacity>
+            <TouchableOpacity disabled={loading}>
               <Text style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</Text>
             </TouchableOpacity>
           </View>
 
           <CustomButton 
-            title="INICIAR SESIÓN" 
+            title={loading ? "INICIANDO SESIÓN..." : "INICIAR SESIÓN"} 
             onPress={handleLogin} 
             style={{ marginTop: 20 }}
+            disabled={loading}
           />
 
           <View style={styles.registerContainer}>
             <Text style={styles.registerText}>¿No tienes cuenta? </Text>
             <Link href="/registro" replace asChild>
-              <TouchableOpacity>
+              <TouchableOpacity disabled={loading}>
                 <Text style={styles.registerLink}>Regístrate aquí</Text>
               </TouchableOpacity>
             </Link>

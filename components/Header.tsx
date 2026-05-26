@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Platform, StatusBar, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
-import { useNavigation } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
 
 interface HeaderProps {
   title: string;
@@ -11,9 +11,10 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ title, showBack = false }) => {
   const navigation = useNavigation<DrawerNavigationProp<any>>();
+  const router = useRouter();
 
   const handleNotifications = () => {
-    Alert.alert('Notificaciones', 'No tienes nuevas notificaciones por el momento.');
+    router.push('/notificaciones');
   };
 
   return (

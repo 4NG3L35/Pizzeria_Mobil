@@ -3,12 +3,10 @@ import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Tou
 import { useRouter, Link } from 'expo-router';
 import { CustomInput } from '../components/ui/CustomInput';
 import { CustomButton } from '../components/ui/CustomButton';
-import { getDatabase } from '../database/db';
-import { useAuth } from '../context/AuthContext';
+import { supabase } from '../database/supabase';
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { login } = useAuth();
   const [formData, setFormData] = useState({
     nombre: '',
     apellido: '',
@@ -16,6 +14,7 @@ export default function RegisterScreen() {
     telefono: '',
     password: '',
   });
+  const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
     if (!formData.nombre || !formData.correo || !formData.password) {
@@ -23,38 +22,55 @@ export default function RegisterScreen() {
       return;
     }
 
+    setLoading(true);
     try {
-      const db = await getDatabase();
+      const username = `${formData.nombre} ${formData.apellido}`.trim();
+      const email = formData.correo.trim();
+      const password = formData.password.trim();
 
-      // Checar si el correo ya existe
-      const existingUser = await db.getFirstAsync('SELECT * FROM users WHERE email = $email', { $email: formData.correo.trim() });
+      // Registrar al usuario en Supabase Auth
+      // Al pasar la metadata 'username' y 'role', nuestro trigger de base de datos 
+      // creará automáticamente el perfil en la tabla public.profiles.
+      const { data, error } = await supabase.auth.signUp({
+        email: email,
+        password: password,
+        options: {
+          data: {
+            username: username,
+            role: 'client', // Rol inicial por defecto
+          }
+        }
+      });
 
-      if (existingUser) {
-        Alert.alert('Error', 'Este correo ya está registrado.');
+      if (error) {
+        Alert.alert('Error', error.message);
+        setLoading(false);
         return;
       }
 
-      // Insertar usuario
-      const username = `${formData.nombre} ${formData.apellido}`.trim();
-      const result = await db.runAsync(
-        'INSERT INTO users (username, email, password, role) VALUES ($username, $email, $password, $role)',
-        { $username: username, $email: formData.correo.trim(), $password: formData.password.trim(), $role: 'client' }
-      );
-
-      login({
-        id: result.lastInsertRowId,
-        username: username,
-        email: formData.correo.trim(),
-        role: 'client'
-      });
-
-      Alert.alert('Éxito', 'Cuenta creada correctamente.', [
-        { text: 'OK', onPress: () => router.replace('/(drawer)/menu') }
-      ]);
+      // Si el registro fue exitoso
+      if (data?.session) {
+        Alert.alert('Éxito', '¡Cuenta creada correctamente! Iniciando sesión...', [
+          { text: 'OK', onPress: () => router.replace('/(drawer)/menu') }
+        ]);
+      } else {
+        // En Supabase, por defecto la confirmación por correo está activada.
+        // Si está activa, el usuario no inicia sesión de golpe sino que debe confirmar su mail.
+        // Damos un aviso amigable por si acaso.
+        Alert.alert(
+          'Registro Exitoso', 
+          'Se ha creado tu cuenta. Si la confirmación por correo está activa en tu Supabase, revisa tu correo. De lo contrario, puedes iniciar sesión directamente.',
+          [
+            { text: 'OK', onPress: () => router.replace('/login') }
+          ]
+        );
+      }
 
     } catch (error: any) {
-      console.error('Error registering user:', error);
+      console.error('Error al registrar usuario:', error);
       Alert.alert('Error', `Hubo un problema al crear la cuenta: ${error.message || error}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -75,12 +91,14 @@ export default function RegisterScreen() {
             iconName="person-outline"
             value={formData.nombre}
             onChangeText={(text) => setFormData({ ...formData, nombre: text })}
+            editable={!loading}
           />
           <CustomInput
             placeholder="Apellido"
             iconName="people-outline"
             value={formData.apellido}
             onChangeText={(text) => setFormData({ ...formData, apellido: text })}
+            editable={!loading}
           />
           <CustomInput
             placeholder="Correo Electrónico"
@@ -89,6 +107,7 @@ export default function RegisterScreen() {
             autoCapitalize="none"
             value={formData.correo}
             onChangeText={(text) => setFormData({ ...formData, correo: text })}
+            editable={!loading}
           />
           <CustomInput
             placeholder="Teléfono"
@@ -96,6 +115,7 @@ export default function RegisterScreen() {
             keyboardType="phone-pad"
             value={formData.telefono}
             onChangeText={(text) => setFormData({ ...formData, telefono: text })}
+            editable={!loading}
           />
           <CustomInput
             placeholder="Contraseña"
@@ -103,18 +123,20 @@ export default function RegisterScreen() {
             isPassword
             value={formData.password}
             onChangeText={(text) => setFormData({ ...formData, password: text })}
+            editable={!loading}
           />
 
           <CustomButton
-            title="CREAR CUENTA"
+            title={loading ? "CREANDO CUENTA..." : "CREAR CUENTA"}
             onPress={handleRegister}
             style={{ marginTop: 20 }}
+            disabled={loading}
           />
 
           <View style={styles.loginContainer}>
             <Text style={styles.loginText}>¿Ya tienes cuenta? </Text>
             <Link href="/login" replace asChild>
-              <TouchableOpacity>
+              <TouchableOpacity disabled={loading}>
                 <Text style={styles.loginLink}>Inicia Sesión</Text>
               </TouchableOpacity>
             </Link>

@@ -1,36 +1,81 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Header } from '../../components/Header';
 import { ProductCard } from '../../components/ui/ProductCard';
-import { Ionicons } from '@expo/vector-icons';
 import { useCart } from '../../context/CartContext';
-import { useRouter } from 'expo-router';
-
-const mockProducts = [
-  { id: '1', title: 'Pizza Hawaiana', description: 'Jamón, piña, queso mozzarella.', price: 75, category: 'Pizzas', imageUrl: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
-  { id: '2', title: 'Pizza Pepperoni', description: 'Pepperoni doble, queso mozzarella.', price: 80, category: 'Pizzas', imageUrl: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
-  { id: '3', title: 'Pizza 4 Quesos', description: 'Mozzarella, parmesano, roquefort, provolone.', price: 85, category: 'Pizzas', imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
-  { id: '4', title: 'Refresco 2L', description: 'Cola, Limón o Naranja.', price: 15, category: 'Bebidas', imageUrl: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
-  { id: '5', title: 'Pan al Ajo', description: '4 porciones de pan tostado con mantequilla de ajo.', price: 20, category: 'Extras', imageUrl: require('../../assets/images/garlic_bread.png') },
-];
-
-const categories = ['Pizzas', 'Bebidas', 'Extras'];
+import { supabase } from '../../database/supabase';
 
 export default function MenuScreen() {
   const router = useRouter();
   const { addItem, totalItems } = useCart();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('Pizzas');
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredProducts = mockProducts.filter(p => 
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('pizzas')
+        .select('*')
+        .order('id', { ascending: true });
+
+      if (error) throw error;
+      if (data) {
+        setProducts(data);
+      }
+    } catch (err) {
+      console.error('Error cargando el catálogo:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const categories = ['Pizzas', 'Bebidas', 'Extras'];
+
+  const filteredProducts = products.filter(p =>
     p.category === activeCategory &&
     p.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const getLocalImage = (title: string) => {
+    if (!title) return require('../../assets/images/placeholder.jpg');
+    const t = title.toLowerCase();
+
+    // Pizzas
+    if (t.includes('margarita')) return require('../../assets/images/pizza_margarita.jpg');
+    if (t.includes('pepperoni')) return require('../../assets/images/pizza_pepperoni.jpg');
+    if (t.includes('cuatro quesos') || t.includes('4 quesos')) return require('../../assets/images/pizza_cuatro_quesos.jpg');
+    if (t.includes('vegetariana')) return require('../../assets/images/pizza_vegetariana.jpg');
+    if (t.includes('carnívora') || t.includes('carnivora')) return require('../../assets/images/pizza_carnivora.jpg');
+    if (t.includes('barbacoa')) return require('../../assets/images/pizza_barbacoa.jpg');
+
+    // Bebidas
+    if (t.includes('coca cola')) return require('../../assets/images/bebida_coca_cola.jpg');
+    if (t.includes('sprite')) return require('../../assets/images/bebida_sprite.jpg');
+    if (t.includes('fanta')) return require('../../assets/images/bebida_fanta.jpg');
+    if (t.includes('naranja')) return require('../../assets/images/jugo_naranja.jpg');
+    if (t.includes('papaya')) return require('../../assets/images/jugo_papaya.jpg');
+
+    // Extras
+    if (t.includes('pan al ajo')) return require('../../assets/images/pan_ajo.png');
+    if (t.includes('palitos')) return require('../../assets/images/extra_palitos_queso.jpg');
+    if (t.includes('alitas')) return require('../../assets/images/ALITAS-SALSA-1024x1024.jpg');
+
+    return require('../../assets/images/placeholder.jpg');
+  };
+
   return (
     <View style={styles.container}>
       <Header title="Menú / Catálogo" />
-      
+
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
         <TextInput
@@ -43,8 +88,8 @@ export default function MenuScreen() {
 
       <View style={styles.tabs}>
         {categories.map(category => (
-          <TouchableOpacity 
-            key={category} 
+          <TouchableOpacity
+            key={category}
             style={[styles.tab, activeCategory === category && styles.activeTab]}
             onPress={() => setActiveCategory(category)}
           >
@@ -55,18 +100,36 @@ export default function MenuScreen() {
         ))}
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-        {filteredProducts.map(product => (
-          <ProductCard
-            key={product.id}
-            title={product.title}
-            description={product.description}
-            price={product.price}
-            imageUrl={product.imageUrl}
-            onAdd={() => addItem({ id: product.id, title: product.title, price: product.price })}
-          />
-        ))}
-      </ScrollView>
+      {loading ? (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color="#D9381E" />
+          <Text style={styles.loaderText}>Cargando delicias...</Text>
+        </View>
+      ) : (
+        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+          {filteredProducts.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="pizza-outline" size={60} color="#ccc" style={{ marginBottom: 12 }} />
+              <Text style={styles.emptyText}>No encontramos productos en esta categoría.</Text>
+            </View>
+          ) : (
+            filteredProducts.map(product => {
+              const localImageSource = getLocalImage(product.title);
+
+              return (
+                <ProductCard
+                  key={product.id}
+                  title={product.title}
+                  description={product.description}
+                  price={Number(product.price)}
+                  imageUrl={localImageSource}
+                  onAdd={() => addItem({ id: String(product.id), title: product.title, price: Number(product.price) })}
+                />
+              );
+            })
+          )}
+        </ScrollView>
+      )}
 
       {totalItems > 0 && (
         <TouchableOpacity style={styles.floatingCart} onPress={() => router.push('/(drawer)/pedido-detalle')} activeOpacity={0.9}>
@@ -135,7 +198,29 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingBottom: 100, 
+    paddingBottom: 100,
+  },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loaderText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 80,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#888',
+    textAlign: 'center',
   },
   floatingCart: {
     position: 'absolute',

@@ -1,8 +1,8 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, Pressable, Alert } from 'react-native';
+import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Header } from '../../components/Header';
 import { CustomButton } from '../../components/ui/CustomButton';
-import { Ionicons } from '@expo/vector-icons';
 
 export default function PromocionesScreen() {
   const [modalVisible, setModalVisible] = useState(false);
@@ -17,7 +17,7 @@ export default function PromocionesScreen() {
       date: 'Válido solo los martes',
       discount: '20% OFF',
       validDay: 2,
-      image: 'https://images.unsplash.com/photo-1576458088443-04a19bb13da6?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60'
+      image: require('../../assets/images/promo_pastas.jpg')
     },
     {
       id: 2,
@@ -27,7 +27,7 @@ export default function PromocionesScreen() {
       date: 'Válido solo los domingos',
       discount: '15% OFF',
       validDay: 0,
-      image: 'https://images.unsplash.com/photo-1544982503-9f984c14501a?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60'
+      image: require('../../assets/images/lasagna-original.jpg')
     }
   ];
 
@@ -40,11 +40,11 @@ export default function PromocionesScreen() {
     <View style={styles.container}>
       <Header title="Promociones" />
       <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-        
+
         {promos.map((promo) => (
           <TouchableOpacity key={promo.id} style={styles.promoCard} activeOpacity={0.9} onPress={() => handleOpenPromo(promo)}>
             <View style={styles.promoImageContainer}>
-              <Image source={{ uri: promo.image }} style={styles.promoImage} />
+              <Image source={promo.image} style={styles.promoImage} />
               <View style={styles.discountBadge}>
                 <Text style={styles.discountText}>{promo.discount}</Text>
               </View>
@@ -77,13 +77,13 @@ export default function PromocionesScreen() {
                 <Ionicons name="close" size={28} color="#333" />
               </Pressable>
             </View>
-            
-            <Image source={{ uri: selectedPromo?.image }} style={styles.modalImage} />
-            
+
+            {selectedPromo && <Image source={selectedPromo.image} style={styles.modalImage} />}
+
             <Text style={styles.modalDesc}>{selectedPromo?.details}</Text>
-            
-            <CustomButton 
-              title="APLICAR DESCUENTO" 
+
+            <CustomButton
+              title="APLICAR DESCUENTO"
               onPress={() => {
                 const today = new Date().getDay();
                 if (selectedPromo?.validDay !== undefined && selectedPromo.validDay !== today) {
